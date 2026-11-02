@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Train Live · Trenes en directo</title>
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+<style>
+  :root { --fondo:#0b1d33; --acento:#2a9d8f; --texto:#f4f7fb; --suave:#9fb3c8; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--fondo); color:var(--texto); font-family:system-ui,-apple-system,sans-serif; overflow-x:hidden; }
+
+  .portada {
+    min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding:24px 16px; text-align:center;
+    background: radial-gradient(circle at 50% 0%, #17406b 0%, var(--fondo) 70%);
+  }
+  .tren { width:min(720px,100%); height:auto; }
+  .avance { animation: avanza 4s ease-in-out infinite alternate; }
+  @keyframes avanza { from { transform: translateX(0); } to { transform: translateX(30px); } }
+  .luz { animation: parpadeo 1.4s infinite; }
+  @keyframes parpadeo { 0%,100% { opacity:1; } 50% { opacity:.2; } }
+
+  h1 { font-size:clamp(36px,8vw,64px); margin:8px 0 4px; letter-spacing:-1px; }
+  .sub { color:var(--suave); margin:0 0 20px; font-size:18px; }
+
+  .buscador { display:flex; width:min(560px,100%); background:#fff; border-radius:14px; overflow:hidden; box-shadow:0 6px 20px rgba(0,0,0,.35); }
+  .buscador input { flex:1; min-width:0; border:0; padding:14px 16px; font-size:16px; outline:none; color:#0b1d33; }
+  .buscador button { border:0; background:var(--acento); color:#fff; padding:0 18px; cursor:pointer; display:flex; align-items:center; }
+  .buscador svg { width:20px; height:20px; }
+  #aviso-busqueda { min-height:22px; margin-top:10px; color:var(--suave); font-size:14px; max-width:560px; }
+
+  .opciones { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; width:min(560px,100%); margin-top:18px; }
+  .opciones button { background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.18); color:var(--texto); padding:14px; border-radius:12px; font-size:15px; cursor:pointer; }
+  .opciones button:hover { background:rgba(255,255,255,.16); }
+
+  section.seccion { padding:32px 16px; max-width:760px; margin:0 auto; }
+  section.seccion h2 { font-size:22px; margin:0 0 8px; }
+  .resumen-global { color:var(--suave); margin:0 0 14px; }
+  .fila { display:flex; justify-content:space-between; gap:12px; padding:10px 12px; background:rgba(255,255,255,.06); border-radius:10px; margin-bottom:8px; font-size:15px; }
+  .fila span:first-child { overflow-wrap:anywhere; }
+  .min { font-weight:700; white-space:nowrap; }
+  .min.alto { color:#ff8a8a; }
+  .min.medio { color:#ffb366; }
+
+  #modal { position:fixed; inset:0; background:rgba(0,0,0,.7); display:none; z-index:10; padding:12px; }
+  #modal.abierto { display:flex; }
+  .caja { background:var(--fondo); border-radius:14px; width:100%; max-width:1000px; height:min(640px,90vh); margin:auto; display:flex; flex-direction:column; overflow:hidden; }
+  .barra { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; padding:10px 12px; }
+  .barra button { background:var(--acento); color:#fff; border:0; border-radius:8px; padding:8px 12px; cursor:pointer; font-size:14px; }
+  .barra .cerrar { background:#2b3f57; }
+  #mapa { flex:1; min-height:0; }
+
+  .tren-mapa { font-size:22px; line-height:24px; cursor:pointer; }
+  .ficha { font-size:13px; line-height:1.45; color:#0b1d33; }
+</style>
+</head>
+<body>
+
+<header class="portada">
+  <svg class="tren" viewBox="0 0 800 240" role="img" aria-label="Tren de alta velocidad">
+    <defs>
+      <linearGradient id="cuerpo" x1="0" x2="0" y1="0" y2="1">
+        <stop offset="0" stop-color="#ffffff"/>
+        <stop offset="1" stop-color="#c9d6e3"/>
+      </linearGradient>
+      <linearGradient id="estela" x1="0" x2="1">
+        <stop offset="0" stop-color="#2a9d8f" stop-opacity="0"/>
+        <stop offset="1" stop-color="#2a9d8f" stop-opacity="0.9"/>
+      </linearGradient>
+      <pattern id="traviesas" width="40" height="20" patternUnits="userSpaceOnUse">
+        <rect x="0" y="4" width="14" height="12" fill="#3a4a5c"/>
+      </pattern>
+    </defs>
+    <rect x="20" y="100" width="160" height="4" fill="url(#estela)"/>
+    <rect x="60" y="125" width="120" height="4" fill="url(#estela)"/>
+    <rect x="30" y="150" width="180" height="4" fill="url(#estela)"/>
+    <g class="avance">
+      <path d="M120 80 H640 Q705 80 735 125 L760 160 Q765 178 740 180 H120 Q100 180 100 160 V100 Q100 80 120 80 Z" fill="url(#cuerpo)"/>
+      <rect x="100" y="150" width="660" height="10" fill="#2a9d8f"/>
+      <rect x="140" y="95" width="50" height="30" rx="6" fill="#17406b"/>
+      <rect x="210" y="95" width="50" height="30" rx="6" fill="#17406b"/>
+      <rect x="280" y="95" width="50" height="30" rx="6" fill="#17406b"/>
+      <rect x="350" y="95" width="50" height="30" rx="6" fill="#17406b"/>
+      <rect x="420" y="95" width="50" height="30" rx="6" fill="#17406b"/>
+      <rect x="490" y="95" width="50" height="30" rx="6" fill="#17406b"/>
+      <rect x="560" y="95" width="50" height="30" rx="6" fill="#17406b"/>
+      <rect x="650" y="92" width="60" height="36" rx="10" fill="#17406b"/>
+      <circle class="luz" cx="752" cy="140" r="6" fill="#ffd60a"/>
+      <circle cx="170" cy="190" r="9" fill="#1b1b1b"/>
+      <circle cx="300" cy="190" r="9" fill="#1b1b1b"/>
+      <circle cx="430" cy="190" r="9" fill="#1b1b1b"/>
+      <circle cx="560" cy="190" r="9" fill="#1b1b1b"/>
+      <circle cx="690" cy="190" r="9" fill="#1b1b1b"/>
+    </g>
+    <rect x="0" y="200" width="800" height="20" fill="url(#traviesas)"/>
+    <rect x="0" y="200" width="800" height="4" fill="#5b6b7d"/>
+    <rect x="0" y="216" width="800" height="4" fill="#5b6b7d"/>
+  </svg>
+
+  <h1>Train Live</h1>
+  <p class="sub">Trenes en directo</p>
+
+  <form class="buscador" id="form-busqueda">
+    <input id="entrada" type="search" placeholder="Número de tren o localizador" autocomplete="off">
+    <button type="submit" aria-label="Buscar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round">
+        <circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16" y2="16"/>
+      </svg>
+    </button>
+  </form>
+  <div id="aviso-busqueda"></div>
+
+  <div class="opciones">
+    <button id="btn-mapa">🗺️ Mapa en directo</button>
+    <button id="btn-retrasos">⏱️ Retrasos</button>
+    <button id="btn-horarios">🗓️ Horarios</button>
+  </div>
+</header>
+
+<section class="seccion" id="retrasos">
+  <h2>Trenes con más retraso</h2>
+  <p class="resumen-global" id="resumen-global">Cargando...</p>
+  <div id="lista-retrasos"></div>
+</section>
+
+<section class="seccion" id="horarios">
+  <h2>Horarios</h2>
+  <p class="resumen-global">La búsqueda por ciudad de origen y destino todavía no está disponible.</p>
+</section>
+
+<div id="modal">
+  <div class="caja">
+    <div class="barra">
+      <span id="resumen-mapa">Cargando...</span>
+      <div>
+        <button id="btn-modo">Ver en 3D</button>
+        <button class="cerrar" id="btn-cerrar">Cerrar</button>
+      </div>
+    </div>
+    <div id="mapa"></div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script>
+  const ARCHIVO_TRENES = 'trenes.json';
+  let trenes = [];
+  let mapa = null;
+  let modo3d = false;
+  const marcadores = new Map();
+
+  function colorDe(min) {
+    if (min >= 10) return '#d62828';
+    if (min > 0) return '#f77f00';
+    return '#2a9d8f';
+  }
+
+  function ficha(t) {
+    return `<div class="ficha">
+      <b>Tren ${t.tren}</b><br>
+      ${t.origen} → ${t.destino}<br>
+      Salida: prevista ${t.salida_prevista} · estimada ${t.salida_estimada}<br>
+      Llegada: prevista ${t.llegada_prevista} · estimada ${t.llegada_estimada}<br>
+      Retraso: ${t.retraso_min} min
+    </div>`;
+  }
+
+  async function cargarDatos() {
+    try {
+      const r = await fetch(ARCHIVO_TRENES + '?t=' + Date.now(), { cache: 'no-store' });
+      trenes = await r.json();
+      pintarRetrasos();
+      if (mapa) pintarMapa();
+    } catch (e) {
+      document.getElementById('resumen-global').textContent =
+        'No puedo leer trenes.json. Revisa que el servidor local esté en marcha.';
+    }
+  }
+
+  function pintarRetrasos() {
+    const con = trenes.filter(t => t.retraso_min > 0);
+    const pct = trenes.length ? (100 * con.length / trenes.length).toFixed(1) : '0';
+    document.getElementById('resumen-global').textContent =
+      `${trenes.length} trenes · ${con.length} con retraso (${pct} %)`;
+
+    const lista = document.getElementById('lista-retrasos');
+    lista.innerHTML = '';
+    [...trenes].sort((a, b) => b.retraso_min - a.retraso_min).slice(0, 10).forEach(t => {
+      const fila = document.createElement('div');
+      fila.className = 'fila';
+      const izq = document.createElement('span');
+      izq.textContent = `Tren ${t.tren} · ${t.origen} → ${t.destino}`;
+      const der = document.createElement('span');
+      der.className = 'min ' + (t.retraso_min >= 10 ? 'alto' : t.retraso_min > 0 ? 'medio' : '');
+      der.textContent = `${t.retraso_min} min`;
+      fila.append(izq, der);
+      lista.append(fila);
+    });
+  }
+
+  function crearMapa() {
+    mapa = new maplibregl.Map({
+      container: 'mapa',
+      style: {
+        version: 8,
+        sources: {
+          osm: {
+            type: 'raster',
+            tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+            tileSize: 256,
+            attribution: '&copy; OpenStreetMap'
+          }
+        },
+        layers: [{ id: 'osm', type: 'raster', source: 'osm' }]
+      },
+      center: [-3.7, 40.2],
+      zoom: 5.5,
+      maxPitch: 70
+    });
+    mapa.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
+  }
+
+  function pintarMapa() {
+    const vistos = new Set();
+    trenes.forEach(t => {
+      vistos.add(t.tren);
+      let m = marcadores.get(t.tren);
+      if (!m) {
+        const el = document.createElement('div');
+        el.className = 'tren-mapa';
+        m = new maplibregl.Marker({ element: el })
+          .setLngLat([t.lon, t.lat])
+          .setPopup(new maplibregl.Popup({ offset: 14 }).setHTML(ficha(t)))
+          .addTo(mapa);
+        marcadores.set(t.tren, m);
+      }
+      m.setLngLat([t.lon, t.lat]);
+      m.getPopup().setHTML(ficha(t));
+      const el = m.getElement();
+      el.textContent = '🚆';
+      el.style.filter = `drop-shadow(0 0 3px ${colorDe(t.retraso_min)})`;
+    });
+    for (const [clave, m] of marcadores) {
+      if (!vistos.has(clave)) {
+        m.remove();
+        marcadores.delete(clave);
+      }
+    }
+    const con = trenes.filter(t => t.retraso_min > 0).length;
+    document.getElementById('resumen-mapa').textContent =
+      `${trenes.length} trenes en directo · ${con} con retraso`;
+  }
+
+  function abrirMapa(despues) {
+    document.getElementById('modal').classList.add('abierto');
+    if (!mapa) crearMapa();
+    if (trenes.length) pintarMapa();
+    setTimeout(() => {
+      mapa.resize();
+      if (despues) despues();
+    }, 350);
+  }
+
+  function cerrarMapa() {
+    document.getElementById('modal').classList.remove('abierto');
+  }
+
+  function cambiarModo() {
+    modo3d = !modo3d;
+    mapa.easeTo({ pitch: modo3d ? 60 : 0, bearing: modo3d ? -20 : 0, duration: 800 });
+    document.getElementById('btn-modo').textContent = modo3d ? 'Ver en 2D' : 'Ver en 3D';
+  }
+
+  function buscar(texto) {
+    const aviso = document.getElementById('aviso-busqueda');
+    const q = texto.trim().toUpperCase();
+    if (!q) {
+      aviso.textContent = 'Escribe un número de tren o un localizador.';
+      return;
+    }
+    const sinCeros = q.replace(/^0+/, '');
+    const t = trenes.find(x => x.tren.replace(/^0+/, '').toUpperCase() === sinCeros)
+           || trenes.find(x => x.viaje.toUpperCase().startsWith(q));
+    if (!t) {
+      aviso.textContent = `No encuentro el tren ${texto.trim()} circulando ahora. Puede que no esté en servicio.`;
+      return;
+    }
+    aviso.textContent = `Tren ${t.tren}: ${t.origen} → ${t.destino}, retraso ${t.retraso_min} min`;
+    abrirMapa(() => {
+      mapa.flyTo({ center: [t.lon, t.lat], zoom: 10 });
+      const m = marcadores.get(t.tren);
+      if (m && !m.getPopup().isOpen()) m.togglePopup();
+    });
+  }
+
+  document.getElementById('form-busqueda').addEventListener('submit', e => {
+    e.preventDefault();
+    buscar(document.getElementById('entrada').value);
+  });
+  document.getElementById('btn-mapa').addEventListener('click', () => abrirMapa());
+  document.getElementById('btn-retrasos').addEventListener('click', () =>
+    document.getElementById('retrasos').scrollIntoView({ behavior: 'smooth' }));
+  document.getElementById('btn-horarios').addEventListener('click', () =>
+    document.getElementById('horarios').scrollIntoView({ behavior: 'smooth' }));
+  document.getElementById('btn-modo').addEventListener('click', cambiarModo);
+  document.getElementById('btn-cerrar').addEventListener('click', cerrarMapa);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrarMapa(); });
+
+  cargarDatos();
+  setInterval(cargarDatos, 30000);
+</script>
+</body>
+</html>
