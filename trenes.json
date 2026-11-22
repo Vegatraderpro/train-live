@@ -5,12 +5,12 @@
     "lat": 36.884506,
     "lon": -2.436616,
     "estado": "STOPPED_AT",
-    "origen": "Granada",
-    "destino": "Almería",
-    "salida_prevista": "22:05",
-    "llegada_prevista": "00:52",
-    "salida_estimada": "22:05",
-    "llegada_estimada": "00:52",
+    "origen": "",
+    "destino": "",
+    "salida_prevista": "",
+    "llegada_prevista": "",
+    "salida_estimada": "",
+    "llegada_estimada": "",
     "retraso_min": 0.0
   }
 ]
